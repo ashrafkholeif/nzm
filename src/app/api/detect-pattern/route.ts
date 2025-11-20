@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { getModelConfig } from "@/lib/llm-config";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// Get model config based on environment
+const modelConfig = getModelConfig(process.env.NODE_ENV);
 
 interface PatternAnalysis {
   patternDetected: boolean;
@@ -33,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
+      model: modelConfig.name,
       messages: [
         {
           role: "system",

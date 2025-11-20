@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { MODEL_CONFIGS, getModelConfig } from "@/lib/llm-config";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// Get model config based on environment
+const modelConfig = getModelConfig(process.env.NODE_ENV);
 
 interface AnalysisResult {
   cascadeScore: number;
@@ -48,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     // Step 1: Hidden reasoning - analyze the response using frameworks
     const reasoningResponse = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
+      model: modelConfig.name,
       messages: [
         {
           role: "system",
@@ -127,7 +131,7 @@ Rules:
 
     // Step 2: Generate next question based on hidden analysis
     const questionResponse = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
+      model: modelConfig.name,
       messages: [
         {
           role: "system",
