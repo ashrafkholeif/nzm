@@ -71,6 +71,29 @@ export default function DiagnosticChat({ params }: { params: { id: string } }) {
 
       if (userError || !userData?.organization_id) {
         console.error("Error getting user organization:", userError);
+
+        // Show error message to user
+        setMessages([
+          {
+            type: "system",
+            content: `⚠️ Database Configuration Error
+
+Unable to load your user profile. This usually means:
+
+1. The RLS (Row Level Security) policies need to be applied to your Supabase database
+2. Your user account may not be properly set up in the system
+
+Error details: ${userError?.message || "User not found in database"}
+
+Please contact your administrator or check the database setup:
+- Run the SQL migration: supabase/migrations/002_add_rls_policies.sql
+- Ensure your user exists in the 'users' table
+- Verify RLS policies are enabled
+
+For immediate testing, you can temporarily disable RLS on the 'users' table in Supabase Dashboard.`,
+          },
+        ]);
+        setIsAnalyzing(false);
         return;
       }
 
