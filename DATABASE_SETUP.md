@@ -1,20 +1,54 @@
 # Database Setup & Troubleshooting Guide
 
-## Current Issue: "Error getting user organization"
+## Fixed Issue: "infinite recursion detected in policy for relation 'users'"
 
-### What's Happening
+### What Was Wrong
 
-The diagnostic page can't load because Row Level Security (RLS) policies haven't been applied to your Supabase database yet.
+The original RLS policy for the `users` table was querying the `users` table in its own policy definition, creating a circular dependency that PostgreSQL couldn't resolve.
+
+**Old (broken) policy:**
+
+```sql
+-- This causes infinite recursion!
+CREATE POLICY "Users can view org members"
+ON users FOR SELECT
+USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
+```
+
+### The Fix
+
+We now use a **security definer function** that breaks the recursion cycle. The function is evaluated once and cached, preventing infinite loops.
+
+**New (working) solution:**
+
+```sql
+-- Helper function (evaluated once, no recursion)
+CREATE FUNCTION auth.get_user_organization_id()
+RETURNS uuid
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+  SELECT organization_id FROM users WHERE id = auth.uid();
+$$;
+
+-- Policy uses the function instead of direct query
+CREATE POLICY "Users can view themselves and org members"
+ON users FOR SELECT
+USING (id = auth.uid() OR organization_id = auth.get_user_organization_id());
+```
 
 ### Quick Fix (2 minutes)
 
-#### Option 1: Apply RLS Policies via Supabase Dashboard
+#### Option 1: Apply Fixed RLS Policies via Supabase Dashboard
 
 1. **Go to your Supabase project** at https://supabase.com/dashboard/project/YOUR_PROJECT_ID
 
 2. **Open SQL Editor** (left sidebar)
 
 3. **Copy and paste** the entire contents of `APPLY_RLS_POLICIES.sql` and click **Run**
+
+   - This will drop old broken policies and create the fixed ones
+   - Includes the security definer function
 
 4. **Refresh your browser** and test the diagnostic page again
 
