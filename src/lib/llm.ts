@@ -10,39 +10,94 @@ export async function analyzeWithLLM(data: {
   evidenceFiles?: any[];
 }) {
   const prompt = `
-You are an expert at identifying eigenquestions - the single most critical coordination problem that, if solved, would eliminate the most downstream issues.
+You are an operations diagnostic expert specializing in eigenquestion discovery. You've diagnosed coordination failures at 50+ companies.
 
-Analyze these workflows from the ${data.department} department:
+FRAMEWORKS TO APPLY (Internal use only - never mention to user):
+
+1. EIGENQUESTION TEST:
+   - ROOT CAUSE vs SYMPTOM: Is this the actual problem or compensating work?
+   - CASCADE DEPTH: How many teams/processes stop when this fails?
+   - STANDALONE VALUE: Would they use ONLY this automation daily?
+   - INVERSION TEST: If this task never existed, would operations improve?
+
+2. SECOND-ORDER EFFECTS:
+   - Trace failure path 3 levels deep
+   - Count affected people/teams/customers
+   - Measure time to executive escalation
+
+3. MENTAL MODEL MISMATCH:
+   - What do they THINK the problem is?
+   - What is it ACTUALLY?
+   - Are they optimizing symptoms vs fixing root cause?
+
+4. PATTERN RECOGNITION:
+   - UPSTREAM FAILURE: Same root cause breaks multiple workflows
+   - INFORMATION GAP: Multiple teams hunting same data
+   - REACTIVE TRACKING: Compensating for lack of proactive updates
+   - HANDOFF FAILURE: Same coordination point fails repeatedly
+
+ANALYSIS APPROACH:
+
+Department: ${data.department}
+Workflows analyzed: ${data.workflows.length}
+
+Workflows:
 ${JSON.stringify(data.workflows, null, 2)}
 
-Consider:
-1. Which workflow failure causes the most cascading problems?
-2. Which automation would prevent the most firefighting?
-3. Which has the highest standalone value?
-4. What patterns reveal a deeper coordination issue?
+Step 1: For each workflow, score:
+- Cascade Score (0-10): How many downstream failures?
+- Specificity Score (0-10): Concrete vs vague answers?
+- Root Cause Score (0-10): Actual problem vs symptom?
 
-Identify:
-1. The EIGENQUESTION - the ONE problem to solve first
-2. Clear reasoning why
-3. Estimated monthly value
-4. Success metrics for 2-week pilot
+Step 2: Identify patterns across workflows:
+- Do multiple workflows solve the SAME underlying problem differently?
+- Are they all reactive tracking (symptom) of same information gap (cause)?
+- Is there a common upstream failure?
 
-Return as JSON:
+Step 3: Apply Inversion Test:
+- Which workflow, if it NEVER existed, would improve operations?
+- If YES → it's compensating work, not the eigenquestion
+- If NO → potential eigenquestion candidate
+
+Step 4: Select THE eigenquestion:
+- Highest cascade score
+- Most teams affected
+- Stops at executive escalation level
+- Would prevent most firefighting
+- Has standalone value (they'd use only this)
+
+Return JSON ONLY:
 {
-  "eigenquestion": "string",
-  "reasoning": "string",
-  "totalValue": number,
-  "patterns": ["pattern1", "pattern2"],
-  "successMetrics": ["metric1", "metric2"]
+  "eigenquestion": "Clear, specific question that if answered proactively would prevent cascade",
+  "reasoning": "Multi-paragraph explanation using specific evidence from workflows. Explain: 1) What the cascade path is, 2) Why this is root cause not symptom, 3) What mental model mismatch exists, 4) Why this has standalone value. Use industry-specific language.",
+  "cascadeAnalysis": {
+    "triggerWorkflow": "Which workflow triggers the cascade",
+    "firstOrderEffects": "Immediate consequences when it fails",
+    "secondOrderEffects": "What breaks next",
+    "thirdOrderEffects": "Final escalation point",
+    "affectedTeams": ["team1", "team2"],
+    "executiveEscalation": true/false
+  },
+  "totalValue": number (monthly cost of failures across all affected workflows),
+  "patterns": ["Specific patterns found: e.g., 'Reactive supplier tracking compensating for lack of proactive updates'"],
+  "mentalModelMismatch": "What they think vs what the real problem is",
+  "successMetrics": ["Concrete, measurable 2-week pilot metrics"],
+  "confidence": number (0-100, how confident you are this is THE eigenquestion)
 }
 `;
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
-      messages: [{ role: "user", content: prompt }],
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: `You are an operations diagnostic expert. Use eigenquestion theory, cascade analysis, and inversion testing to find the ONE critical problem. Be rigorous - many "problems" are actually symptoms of deeper coordination failures.`,
+        },
+        { role: "user", content: prompt },
+      ],
       response_format: { type: "json_object" },
-      temperature: 0.3,
+      temperature: 0.2, // Lower for more analytical consistency
     });
 
     return JSON.parse(response.choices[0].message.content!);
@@ -54,6 +109,7 @@ Return as JSON:
       totalValue: 0,
       patterns: [],
       successMetrics: [],
+      confidence: 0,
     };
   }
 }

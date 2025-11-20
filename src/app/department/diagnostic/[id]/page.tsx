@@ -5,346 +5,163 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Upload, Send, ArrowLeft } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-
-// This is the question flow - VERY IMPORTANT
-const QUESTIONS = [
-  {
-    id: "domain",
-    type: "choice",
-    text: "Which coordination challenge best describes your department?",
-    options: [
-      {
-        value: "supply",
-        label: "Supply Coordination",
-        desc: "Managing suppliers, materials, inputs",
-      },
-      {
-        value: "demand",
-        label: "Demand Coordination",
-        desc: "Customer orders, fulfillment, delivery",
-      },
-      {
-        value: "service",
-        label: "Service Coordination",
-        desc: "Asset maintenance, equipment, facilities",
-      },
-    ],
-  },
-  {
-    id: "task",
-    type: "text",
-    text: "Tell me about ONE repetitive coordination task your team does daily or weekly. Be specific.",
-    placeholder:
-      "Example: Every morning we call 20 suppliers to check delivery status",
-  },
-  {
-    id: "trigger",
-    type: "text",
-    text: "What TRIGGERS this task? How do you know to start?",
-    placeholder: "Example: Every day at 8am, or when an order arrives",
-  },
-  {
-    id: "inputs",
-    type: "text",
-    text: "Where does the information come from? List all sources.",
-    placeholder: "Excel files, emails, phone calls, systems",
-  },
-  {
-    id: "steps",
-    type: "text",
-    text: "Walk me through the steps. What happens first, then what?",
-    placeholder:
-      "First I check Excel, then I call suppliers, then I update the sheet...",
-  },
-  {
-    id: "failure",
-    type: "text",
-    text: "CRITICAL: When this task fails, what breaks? Trace the cascade.",
-    placeholder: "First X happens, then Y breaks, then Z escalates...",
-  },
-  {
-    id: "frequency",
-    type: "choice",
-    text: "How often does this task happen?",
-    options: [
-      { value: "multiple_daily", label: "Multiple times per day" },
-      { value: "daily", label: "Daily" },
-      { value: "weekly", label: "Weekly" },
-    ],
-  },
-  {
-    id: "time",
-    type: "text",
-    text: "How many hours does this task take each time?",
-    placeholder: "Example: 2 hours",
-  },
-  {
-    id: "cost",
-    type: "text",
-    text: "When it fails, what does each incident cost? (time, money, reputation)",
-    placeholder: "Example: 50000 EGP in downtime",
-  },
-  {
-    id: "failures_per_month",
-    type: "choice",
-    text: "How often do these failures happen?",
-    options: [
-      { value: "1-2", label: "1-2 times per month" },
-      { value: "3-5", label: "3-5 times per month" },
-      { value: "6-10", label: "6-10 times per month" },
-      { value: "10+", label: "More than 10 times per month" },
-    ],
-  },
-  {
-    id: "standalone",
-    type: "choice",
-    text: "If ONLY this task was automated, would you use it daily?",
-    options: [
-      { value: "yes", label: "Yes, absolutely" },
-      { value: "maybe", label: "Maybe" },
-      { value: "no", label: "No, need more" },
-    ],
-  },
-  {
-    id: "another",
-    type: "choice",
-    text: "Should we analyze another workflow?",
-    options: [
-      { value: "yes", label: "Yes, add another workflow" },
-      { value: "no", label: "No, analyze what we have" },
-    ],
-  },
-];
+import { AlertCircle, TrendingUp, Zap } from "lucide-react";
 
 interface Message {
-  type: "bot" | "user";
+  type: "bot" | "user" | "pattern" | "system";
   content: string;
-  options?: any[];
+  explanation?: string;
+  cascadeScore?: number;
+  isHighPriority?: boolean;
+}
+
+interface Workflow {
+  responses: Array<{ question: string; answer: string }>;
+  cascadeScore: number;
+  depth: number;
 }
 
 export default function DiagnosticChat({ params }: { params: { id: string } }) {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [responses, setResponses] = useState<any>({});
-  const [workflows, setWorkflows] = useState<any[]>([]);
+  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [currentWorkflow, setCurrentWorkflow] = useState<
+    Array<{ question: string; answer: string }>
+  >([]);
+  const [currentWorkflowDepth, setCurrentWorkflowDepth] = useState(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const [industry, setIndustry] = useState("automotive");
+  const [department, setDepartment] = useState("");
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
-
-  useEffect(() => {
-    initializeSession();
-  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    initializeSession();
+  }, []);
+
   const initializeSession = async () => {
-    // Get current user to retrieve organization_id
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    if (!user) {
-      console.error("No authenticated user found");
-      return;
-    }
-
-    console.log("User authenticated:", user.id);
-
-    // Get user's organization_id and role from users table
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("organization_id, role")
-      .eq("id", user.id)
-      .single();
-
-    if (userError || !userData?.organization_id) {
-      console.error("Error getting user organization:", userError);
-      return;
-    }
-
-    console.log("User organization:", userData.organization_id);
-
-    // Check if user is admin
-    if (userData.role === "admin") {
-      setIsAdmin(true);
-    }
-
-    const { data: session, error: sessionError } = await supabase
-      .from("diagnostic_sessions")
-      .insert({
-        department: params.id,
-        organization_id: userData.organization_id,
-        user_id: user.id,
-        status: "in_progress",
-      })
-      .select()
-      .single();
-
-    if (sessionError) {
-      console.error("Error creating session:", sessionError);
-      return;
-    }
-
-    if (session) {
-      console.log("Session created successfully:", session.id);
-      setSessionId(session.id);
-    } else {
-      console.error("Session created but no data returned");
-    }
-
-    const firstQuestion = QUESTIONS[0];
-    setMessages([
-      {
-        type: "bot",
-        content: firstQuestion.text,
-        options: firstQuestion.options,
-      },
-    ]);
-  };
-
-  const handleOptionSelect = (value: string) => {
-    const question = QUESTIONS[currentQuestionIndex];
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        type: "user",
-        content:
-          QUESTIONS[currentQuestionIndex].options?.find(
-            (o) => o.value === value
-          )?.label || value,
-      },
-    ]);
-
-    const newResponses = { ...responses, [question.id]: value };
-    setResponses(newResponses);
-
-    if (question.id === "another") {
-      if (value === "yes") {
-        setWorkflows((prev) => [...prev, responses]);
-        setResponses({});
-        setCurrentQuestionIndex(1);
-        showNextQuestion(1);
-      } else {
-        performAnalysis([...workflows, responses]);
+      if (!user) {
+        console.error("No authenticated user found");
+        router.push("/auth/admin-login");
+        return;
       }
-    } else {
-      moveToNextQuestion();
+
+      setUserId(user.id);
+
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("organization_id, role")
+        .eq("id", user.id)
+        .single();
+
+      if (userError || !userData?.organization_id) {
+        console.error("Error getting user organization:", userError);
+        return;
+      }
+
+      setOrganizationId(userData.organization_id);
+      setIsAdmin(userData.role === "admin");
+
+      // Create diagnostic session
+      const { data: session, error: sessionError } = await supabase
+        .from("diagnostic_sessions")
+        .insert({
+          department: params.id,
+          organization_id: userData.organization_id,
+          user_id: user.id,
+          status: "in_progress",
+        })
+        .select()
+        .single();
+
+      if (sessionError || !session) {
+        console.error("Error creating session:", sessionError);
+        return;
+      }
+
+      setSessionId(session.id);
+      setDepartment(params.id);
+
+      // Start with initial question from API
+      await getNextQuestion("START");
+    } catch (error) {
+      console.error("Initialization error:", error);
     }
   };
 
-  const handleTextSubmit = () => {
-    if (!inputValue.trim()) return;
-
-    const question = QUESTIONS[currentQuestionIndex];
-
-    setMessages((prev) => [...prev, { type: "user", content: inputValue }]);
-
-    const newResponses = { ...responses, [question.id]: inputValue };
-    setResponses(newResponses);
-
-    setInputValue("");
-    moveToNextQuestion();
-  };
-
-  const moveToNextQuestion = () => {
-    const nextIndex = currentQuestionIndex + 1;
-    if (nextIndex < QUESTIONS.length) {
-      setCurrentQuestionIndex(nextIndex);
-      showNextQuestion(nextIndex);
-    }
-  };
-
-  const showNextQuestion = (index: number) => {
-    setTimeout(() => {
-      const question = QUESTIONS[index];
-      setMessages((prev) => [
-        ...prev,
-        { type: "bot", content: question.text, options: question.options },
-      ]);
-    }, 500);
-  };
-
-  const performAnalysis = async (allWorkflows: any[]) => {
+  const getNextQuestion = async (userResponse: string) => {
     setIsAnalyzing(true);
 
-    console.log("performAnalysis called with sessionId:", sessionId);
-    console.log("Workflows to analyze:", allWorkflows);
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        type: "bot",
-        content: "Analyzing your workflows to find the eigenquestion...",
-      },
-    ]);
-
     try {
-      // Call API route to perform analysis on the server
-      const response = await fetch("/api/analyze-workflows", {
+      const response = await fetch("/api/analyze-response", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId,
-          workflows: allWorkflows,
+          response: userResponse,
+          context: {
+            department,
+            previousAnswers: currentWorkflow,
+            currentWorkflowDepth,
+          },
+          industry,
+          workflowCount: workflows.length,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        console.error("API Error:", data);
-        setMessages((prev) => [
-          ...prev,
-          {
-            type: "bot",
-            content: `Error during analysis: ${data.error || "Unknown error"}`,
-          },
-        ]);
-        setIsAnalyzing(false);
-        return;
+        throw new Error(data.error || "Failed to get next question");
       }
 
-      const { analysis: analysisData } = data;
+      // Add bot message with question
+      const botMessage: Message = {
+        type: "bot",
+        content: data.question,
+        explanation: data.explanation,
+        cascadeScore: data.analysis?.cascadeScore,
+        isHighPriority: data.analysis?.isHighPriority,
+      };
 
-      // Session is already updated by the API route, no need to update again
+      setMessages((prev) => [...prev, botMessage]);
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          type: "bot",
-          content: `
-EIGENQUESTION DISCOVERED:
-"${analysisData.eigenquestion}"
+      // Check if we should detect patterns (after 2+ workflows)
+      if (
+        workflows.length >= 2 &&
+        data.analysis?.nextAction !== "CASCADE_PROBE"
+      ) {
+        await detectPatterns();
+      }
 
-REASONING:
-${analysisData.analysis_reasoning}
-
-Thank you for completing the diagnostic! Your responses have been recorded.
-`,
-        },
-      ]);
+      // Handle workflow completion signals
+      if (data.analysis?.nextAction === "NEW_WORKFLOW") {
+        completeCurrentWorkflow(data.analysis.cascadeScore || 0);
+      } else if (data.analysis?.nextAction === "VALIDATE_EIGENQUESTION") {
+        await validateAndComplete();
+      }
 
       setIsAnalyzing(false);
-      setIsComplete(true);
-      // Don't auto-redirect - let user close when ready
     } catch (error: any) {
-      console.error("Analysis error:", error);
+      console.error("Error getting next question:", error);
       setMessages((prev) => [
         ...prev,
         {
-          type: "bot",
+          type: "system",
           content: `Error: ${error.message}`,
         },
       ]);
@@ -352,33 +169,195 @@ Thank you for completing the diagnostic! Your responses have been recorded.
     }
   };
 
+  const completeCurrentWorkflow = (cascadeScore: number) => {
+    const workflow: Workflow = {
+      responses: currentWorkflow,
+      cascadeScore,
+      depth: currentWorkflowDepth,
+    };
+
+    setWorkflows((prev) => [...prev, workflow]);
+    setCurrentWorkflow([]);
+    setCurrentWorkflowDepth(0);
+  };
+
+  const detectPatterns = async () => {
+    try {
+      const response = await fetch("/api/detect-pattern", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workflows: workflows.map((w) => w.responses),
+          industry,
+        }),
+      });
+
+      const pattern = await response.json();
+
+      if (pattern.patternDetected && pattern.confidence >= 70) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            type: "pattern",
+            content: `🔍 PATTERN DETECTED: ${pattern.description}\n\n${pattern.hypothesis}`,
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error("Pattern detection error:", error);
+    }
+  };
+
+  const validateAndComplete = async () => {
+    setIsAnalyzing(true);
+
+    try {
+      // Final analysis with all workflows
+      const allWorkflows = [
+        ...workflows,
+        {
+          responses: currentWorkflow,
+          cascadeScore: 0,
+          depth: currentWorkflowDepth,
+        },
+      ];
+
+      const response = await fetch("/api/analyze-workflows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          workflows: allWorkflows.map((w) => w.responses),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Analysis failed");
+      }
+
+      const { analysis: analysisData } = data;
+
+      // Display final eigenquestion discovery
+      setMessages((prev) => [
+        ...prev,
+        {
+          type: "system",
+          content: `
+🎯 EIGENQUESTION DISCOVERED:
+
+"${analysisData.eigenquestion}"
+
+REASONING:
+${analysisData.analysis_reasoning}
+
+This is the ONE question that, if answered proactively, would prevent cascading failures across your operations.
+
+Thank you for completing the diagnostic!
+`,
+        },
+      ]);
+
+      setIsComplete(true);
+      setIsAnalyzing(false);
+    } catch (error: any) {
+      console.error("Final analysis error:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          type: "system",
+          content: `Error during final analysis: ${error.message}`,
+        },
+      ]);
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleSubmit = () => {
+    if (!inputValue.trim() || isAnalyzing) return;
+
+    // Add user message
+    setMessages((prev) => [
+      ...prev,
+      {
+        type: "user",
+        content: inputValue,
+      },
+    ]);
+
+    // Store in current workflow
+    const lastBotMessage = messages
+      .filter((m) => m.type === "bot")
+      .slice(-1)[0];
+    if (lastBotMessage) {
+      setCurrentWorkflow((prev) => [
+        ...prev,
+        {
+          question: lastBotMessage.content,
+          answer: inputValue,
+        },
+      ]);
+      setCurrentWorkflowDepth((prev) => prev + 1);
+    }
+
+    // Get next question
+    const response = inputValue;
+    setInputValue("");
+    getNextQuestion(response);
+  };
+
   const handleSignOut = async () => {
     if (isAdmin) {
-      // Admin just returns to dashboard
       router.push("/admin/dashboard");
     } else {
-      // Department heads sign out
       await supabase.auth.signOut();
       router.push("/");
     }
   };
 
+  const getCascadeIndicator = (score?: number) => {
+    if (!score) return null;
+    if (score >= 8)
+      return (
+        <span title="High cascade potential!">
+          <Zap className="w-4 h-4 text-red-500 inline ml-2" />
+        </span>
+      );
+    if (score >= 5)
+      return (
+        <span title="Moderate cascade risk">
+          <TrendingUp className="w-4 h-4 text-orange-500 inline ml-2" />
+        </span>
+      );
+    return null;
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b sticky top-0 z-10">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      {/* Header */}
+      <div className="bg-white border-b sticky top-0 z-10 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Diagnostic Chat</h2>
-            <div className="text-sm text-gray-600">
-              {" "}
-              Question {currentQuestionIndex + 1} of {QUESTIONS.length}
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">
+                Dynamic Workflow Diagnostic
+              </h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Discovering your eigenquestion through adaptive questioning
+              </p>
+            </div>
+            <div className="text-sm text-gray-600 bg-blue-50 px-4 py-2 rounded-lg">
+              <div className="font-semibold">Workflows: {workflows.length}</div>
+              <div className="text-xs">Depth: {currentWorkflowDepth}</div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Messages */}
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="space-y-4 min-h-[60vh]">
+        <div className="space-y-4 min-h-[60vh] mb-24">
           {messages.map((message, index) => (
             <div
               key={index}
@@ -389,37 +368,33 @@ Thank you for completing the diagnostic! Your responses have been recorded.
               <Card
                 className={`max-w-2xl ${
                   message.type === "user"
-                    ? "bg-blue-500 text-white"
+                    ? "bg-blue-600 text-white border-blue-700"
+                    : message.type === "pattern"
+                    ? "bg-purple-100 border-purple-300"
+                    : message.type === "system"
+                    ? "bg-green-50 border-green-200"
                     : "bg-white"
                 }`}
               >
                 <CardContent className="p-4">
-                  <p className="whitespace-pre-wrap">{message.content}</p>
-                  {message.type === "bot" &&
-                    message.options &&
-                    index === messages.length - 1 && (
-                      <div className="mt-4 space-y-2">
-                        {message.options.map((option) => (
-                          <Button
-                            key={option.value}
-                            variant="outline"
-                            className="w-full justify-start text-left p-3"
-                            onClick={() => handleOptionSelect(option.value)}
-                          >
-                            <div>
-                              <div className="font-semibold">
-                                {option.label}
-                              </div>
-                              {option.desc && (
-                                <div className="text-sm opacity-80">
-                                  {option.desc}
-                                </div>
-                              )}
-                            </div>
-                          </Button>
-                        ))}
-                      </div>
+                  <div className="flex items-start gap-2">
+                    {message.isHighPriority && message.type === "bot" && (
+                      <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-1" />
                     )}
+                    <div className="flex-1">
+                      <p className="whitespace-pre-wrap">
+                        {message.content}
+                        {getCascadeIndicator(message.cascadeScore)}
+                      </p>
+                      {message.explanation && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <p className="text-sm italic text-gray-600">
+                            💡 {message.explanation}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -429,7 +404,7 @@ Thank you for completing the diagnostic! Your responses have been recorded.
             <div className="flex justify-center py-8">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4" />
-                <p>Analyzing with AI...</p>
+                <p className="text-gray-600">Analyzing with AI...</p>
               </div>
             </div>
           )}
@@ -437,9 +412,41 @@ Thank you for completing the diagnostic! Your responses have been recorded.
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Input Area - Fixed at bottom */}
+        {!isComplete && (
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
+            <div className="max-w-4xl mx-auto px-4 py-4">
+              <div className="flex gap-2">
+                <Input
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  placeholder="Type your answer... Be specific with examples and numbers."
+                  onKeyPress={(e) =>
+                    e.key === "Enter" && !e.shiftKey && handleSubmit()
+                  }
+                  className="flex-1"
+                  disabled={isAnalyzing}
+                />
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isAnalyzing || !inputValue.trim()}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6"
+                >
+                  Send
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                💡 Tip: The more specific you are, the better we can identify
+                cascade patterns
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Completion Button */}
         {isComplete && (
-          <div className="sticky bottom-0 bg-white border-t pt-4 pb-4">
-            <div className="flex justify-center">
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
+            <div className="max-w-4xl mx-auto px-4 py-4 flex justify-center">
               <Button
                 onClick={handleSignOut}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3"
@@ -449,23 +456,6 @@ Thank you for completing the diagnostic! Your responses have been recorded.
             </div>
           </div>
         )}
-
-        {QUESTIONS[currentQuestionIndex]?.type === "text" &&
-          !isAnalyzing &&
-          !isComplete &&
-          messages.length > 0 && (
-            <div className="sticky bottom-0 bg-gray-50 pt-4">
-              <div className="flex gap-2">
-                <Input
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  placeholder={QUESTIONS[currentQuestionIndex].placeholder}
-                  onKeyPress={(e) => e.key === "Enter" && handleTextSubmit()}
-                  className="flex-1"
-                />
-              </div>
-            </div>
-          )}
       </div>
     </div>
   );
