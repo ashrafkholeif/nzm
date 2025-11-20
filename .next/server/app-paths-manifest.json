@@ -1,0 +1,11 @@
+{
+  "/admin/report/page": "app/admin/report/page.js",
+  "/department/results/[id]/page": "app/department/results/[id]/page.js",
+  "/admin/dashboard/page": "app/admin/dashboard/page.js",
+  "/api/dashboard-data/route": "app/api/dashboard-data/route.js",
+  "/api/global-analysis/route": "app/api/global-analysis/route.js",
+  "/auth/admin-login/page": "app/auth/admin-login/page.js",
+  "/api/session-results/[id]/route": "app/api/session-results/[id]/route.js",
+  "/department/diagnostic/[id]/page": "app/department/diagnostic/[id]/page.js",
+  "/api/completed-sessions/route": "app/api/completed-sessions/route.js"
+}

@@ -1,0 +1,83 @@
+{
+  "components": {
+    "ui": {
+      "button": {
+        "description": "A styled button component used throughout the application.",
+        "props": {
+          "label": "string",
+          "onClick": "function",
+          "disabled": "boolean"
+        }
+      },
+      "card": {
+        "description": "A styled container for displaying content.",
+        "props": {
+          "children": "ReactNode"
+        }
+      },
+      "input": {
+        "description": "A styled input field for user input.",
+        "props": {
+          "value": "string",
+          "onChange": "function",
+          "placeholder": "string"
+        }
+      },
+      "label": {
+        "description": "A styled label for form elements.",
+        "props": {
+          "text": "string",
+          "htmlFor": "string"
+        }
+      },
+      "textarea": {
+        "description": "A styled textarea for multi-line input.",
+        "props": {
+          "value": "string",
+          "onChange": "function",
+          "placeholder": "string"
+        }
+      },
+      "progress": {
+        "description": "A component that visually represents progress.",
+        "props": {
+          "value": "number"
+        }
+      }
+    },
+    "pages": {
+      "adminSignup": {
+        "description": "Handles the organization account creation process.",
+        "props": {
+          "formData": "object",
+          "onSubmit": "function"
+        }
+      },
+      "adminDashboard": {
+        "description": "Displays the dashboard for the admin.",
+        "props": {
+          "organization": "object",
+          "departments": "array"
+        }
+      },
+      "report": {
+        "description": "Generates and displays the final report for the admin.",
+        "props": {
+          "analysis": "object"
+        }
+      },
+      "diagnosticChat": {
+        "description": "Facilitates the diagnostic chat for department heads.",
+        "props": {
+          "sessionId": "string"
+        }
+      },
+      "resultsPage": {
+        "description": "Displays the results of the diagnostic analysis for a specific department.",
+        "props": {
+          "session": "object"
+        }
+      }
+    }
+  }
+}
