@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
 
     // Perform the 3-question standalone value test
     const response = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4-turbo-preview",
       messages: [
         {
           role: "system",

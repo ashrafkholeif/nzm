@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
 
     // Step 1: Hidden reasoning - analyze the response using frameworks
     const reasoningResponse = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4-turbo-preview",
       messages: [
         {
           role: "system",
@@ -127,7 +127,7 @@ Rules:
 
     // Step 2: Generate next question based on hidden analysis
     const questionResponse = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4-turbo-preview",
       messages: [
         {
           role: "system",

@@ -89,8 +89,36 @@ export default function DiagnosticChat({ params }: { params: { id: string } }) {
         .select()
         .single();
 
-      if (sessionError || !session) {
+      if (sessionError) {
         console.error("Error creating session:", sessionError);
+        console.error("Session error details:", {
+          message: sessionError.message,
+          details: sessionError.details,
+          hint: sessionError.hint,
+          code: sessionError.code,
+        });
+
+        // Show error to user
+        setMessages([
+          {
+            type: "system",
+            content: `Error creating diagnostic session: ${sessionError.message}. Please contact your administrator.`,
+          },
+        ]);
+        setIsAnalyzing(false);
+        return;
+      }
+
+      if (!session) {
+        console.error("Session created but no data returned");
+        setMessages([
+          {
+            type: "system",
+            content:
+              "Error: Could not create diagnostic session. Please try again.",
+          },
+        ]);
+        setIsAnalyzing(false);
         return;
       }
 
@@ -138,7 +166,14 @@ export default function DiagnosticChat({ params }: { params: { id: string } }) {
         isHighPriority: data.analysis?.isHighPriority,
       };
 
-      setMessages((prev) => [...prev, botMessage]);
+      // Only add message if it's not a duplicate (check last message)
+      setMessages((prev) => {
+        const lastMessage = prev[prev.length - 1];
+        if (lastMessage?.content === data.question) {
+          return prev; // Don't add duplicate
+        }
+        return [...prev, botMessage];
+      });
 
       // Check if we should detect patterns (after 2+ workflows)
       if (
