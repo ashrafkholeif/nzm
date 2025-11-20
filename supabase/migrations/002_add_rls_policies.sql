@@ -7,8 +7,8 @@ USING (auth.uid() IS NOT NULL);
 
 -- Users: Users can view their own record and org members
 -- CRITICAL FIX: Avoid infinite recursion by using a security definer function
--- First, create helper function to get user's org_id
-CREATE OR REPLACE FUNCTION auth.get_user_organization_id()
+-- First, create helper function to get user's org_id in public schema
+CREATE OR REPLACE FUNCTION public.get_user_organization_id()
 RETURNS uuid
 LANGUAGE sql
 SECURITY DEFINER
@@ -23,7 +23,7 @@ CREATE POLICY "Users can view themselves and org members"
 ON users FOR SELECT
 USING (
   id = auth.uid() OR 
-  organization_id = auth.get_user_organization_id()
+  organization_id = public.get_user_organization_id()
 );
 
 CREATE POLICY "Users can update themselves"

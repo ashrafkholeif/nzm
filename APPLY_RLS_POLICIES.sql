@@ -23,10 +23,11 @@ DROP POLICY IF EXISTS "Users can view org analysis" ON eigenquestion_analysis;
 DROP POLICY IF EXISTS "Admins can create org analysis" ON eigenquestion_analysis;
 
 -- Drop helper function if exists
-DROP FUNCTION IF EXISTS auth.get_user_organization_id();
+DROP FUNCTION IF EXISTS public.get_user_organization_id();
 
 -- Step 3: Create Security Definer Function (CRITICAL - prevents infinite recursion)
-CREATE OR REPLACE FUNCTION auth.get_user_organization_id()
+-- Note: Must be in 'public' schema, not 'auth' schema (permission denied)
+CREATE OR REPLACE FUNCTION public.get_user_organization_id()
 RETURNS uuid
 LANGUAGE sql
 SECURITY DEFINER
@@ -49,7 +50,7 @@ CREATE POLICY "Users can view themselves and org members"
 ON users FOR SELECT
 USING (
   id = auth.uid() OR 
-  organization_id = auth.get_user_organization_id()
+  organization_id = public.get_user_organization_id()
 );
 
 CREATE POLICY "Users can update themselves"
